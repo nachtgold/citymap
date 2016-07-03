@@ -22,18 +22,56 @@ public class World : MonoBehaviour {
         GenerateZones();
         GenerateMap();
         FindEdges();
+        FindVertices();
+    }
+
+    void FindVertices() {
+        foreach (Zone zone in zones) {
+            if (zone.edges.Count > 1) {
+                zone.vertices.Add(zone.edges[0]);
+
+                for (int i = 1; i < zone.edges.Count - 1; i++) {
+                    Vector2 previousCoord = zone.edges[i - 1];
+                    Vector2 interestingCoord = zone.edges[i];
+                    Vector2 followingCoord = zone.edges[i + 1];
+
+                    // it is an vertice, when the relative position between the previous and following node is different
+                    if (previousCoord.x - interestingCoord.x != interestingCoord.x - followingCoord.x ||
+                        previousCoord.y - interestingCoord.y != interestingCoord.y - followingCoord.y) {
+                        zone.vertices.Add(interestingCoord);
+                    }
+                }
+
+                zone.vertices.Add(zone.edges[zone.edges.Count - 1]);
+
+                // first vertice is on an edge between two other vertices
+                int len = zone.vertices.Count;
+                if (len > 2) {
+                    if (zone.edges[len - 1].x - zone.edges[0].x == zone.edges[0].x - zone.edges[1].x &&
+                        zone.edges[len - 1].y - zone.edges[0].y == zone.edges[0].y - zone.edges[1].y) {
+
+                        zone.vertices.RemoveAt(0);
+                    }
+                }
+            }
+        }
     }
 
     void FindEdges() {
+        //Zone zone = zones[24];
         foreach (Zone zone in zones) {
-            for (int x = zone.x; x < width; x++) {
-                for (int y = zone.y; y < height; y++) {
-                    if (zone.map[x, y] == 1) {
-                        bool isAnEdge = IsCoordAnEdge(zone.map, x, y);
+            bool edgesNotFound = true;
+            for (int x = zone.x; edgesNotFound && x < width; x++) {
+                for (int y = zone.y; edgesNotFound && y < height; y++) {
+                    if (zone.map[x, y] == 1 && !zone.edges.Contains(new Vector2(x, y))) {
 
+                        int edgeCount;
+                        bool isAnEdge = IsCoordAnEdge(zone.map, x, y, out edgeCount);
                         if (isAnEdge) {
                             zone.edges.Add(new Vector2(x, y));
                             FollowZoneEdge(zone, x, y, out x, out y);
+                            // corner pixel are catched by edge detection, but thats ok 
+                            edgesNotFound = false;
                         }
                     }
                 }
@@ -41,31 +79,40 @@ public class World : MonoBehaviour {
         }
     }
 
-    bool IsCoordAnEdge(int[,] map, int x, int y) {
+    bool IsCoordAnEdge(int[,] map, int x, int y, out int edgeCount) {
+        edgeCount = 0;
         for (int tileX = x - 1; tileX <= x + 1; tileX++) {
             for (int tileY = y - 1; tileY <= y + 1; tileY++) {
                 if ((tileX == x || tileY == y) && (!IsOnMap(tileX, tileY) || map[tileX, tileY] == 0)) {
-                    return true;
+                    edgeCount++;
                 }
             }
         }
 
-        return false;
+        return edgeCount > 0;
     }
 
     void FollowZoneEdge(Zone zone, int x, int y, out int nx, out int ny) {
         nx = x;
         ny = y;
 
+        // best edge for isolated pixels at the end of a corner
+        int bestX = -1;
+        int bestY = -1;
+        bool edgeFound = false;
+
         // horizontal and vertical
         for (int tileX = x - 1; tileX <= x + 1; tileX++) {
             for (int tileY = y - 1; tileY <= y + 1; tileY++) {
-                if ((tileX == x || tileY == y) && IsOnMap(tileX, tileY) && zone.map[tileX, tileY] == 1 && 
-                    !zone.edges.Contains(new Vector2(tileX, tileY)) && IsCoordAnEdge(zone.map, tileX, tileY)) {
+                int edgeCount;
+                if ((tileX == x || tileY == y) && IsOnMap(tileX, tileY) && zone.map[tileX, tileY] == 1 &&
+                    !zone.edges.Contains(new Vector2(tileX, tileY)) && IsCoordAnEdge(zone.map, tileX, tileY, out edgeCount)) {
 
-                    zone.edges.Add(new Vector2(tileX, tileY));
-                    FollowZoneEdge(zone, tileX, tileY, out nx, out ny);
-                    return;
+                    if (!edgeFound || edgeCount > 2) {
+                        bestX = tileX;
+                        bestY = tileY;
+                        edgeFound = true;
+                    }
                 }
             }
         }
@@ -73,14 +120,22 @@ public class World : MonoBehaviour {
         // diagonal
         for (int tileX = x - 1; tileX <= x + 1; tileX++) {
             for (int tileY = y - 1; tileY <= y + 1; tileY++) {
+                int edgeCount;
                 if (tileX != x && tileY != y && IsOnMap(tileX, tileY) && zone.map[tileX, tileY] == 1 &&
-                    !zone.edges.Contains(new Vector2(tileX, tileY)) && IsCoordAnEdge(zone.map, tileX, tileY)) {
+                    !zone.edges.Contains(new Vector2(tileX, tileY)) && IsCoordAnEdge(zone.map, tileX, tileY, out edgeCount)) {
 
-                    zone.edges.Add(new Vector2(tileX, tileY));
-                    FollowZoneEdge(zone, tileX, tileY, out nx, out ny);
-                    return;
+                    if (!edgeFound || edgeCount > 2) {
+                        bestX = tileX;
+                        bestY = tileY;
+                        edgeFound = true;
+                    }
                 }
             }
+        }
+
+        if (edgeFound) {
+            zone.edges.Add(new Vector2(bestX, bestY));
+            FollowZoneEdge(zone, bestX, bestY, out nx, out ny);
         }
     }
 
@@ -134,13 +189,56 @@ public class World : MonoBehaviour {
 
     void OnDrawGizmos() {
         foreach (Zone zone in zones) {
+
+            //if (zone == zones[24]) {
+            //    Gizmos.color = Color.green;
+            //    for (int x = 0; x < width; x++) {
+            //        for (int y = 0; y < height; y++) {
+            //            if (zone.map[x, y] == 1) {
+            //                Gizmos.DrawCube(GetWorldVectorFor(x, y, 30), Vector3.one);
+            //            }
+            //        }
+            //    }
+            //}
+
             Gizmos.color = Color.black;
-            Gizmos.DrawCube(GetWorldVectorFor(zone.x, zone.y), Vector3.one*2);
+            Gizmos.DrawCube(GetWorldVectorFor(zone.x, zone.y), Vector3.one * 2);
 
             Gizmos.color = zone.color;
-            foreach (Vector2 coord in zone.edges) {
-                Gizmos.DrawCube(GetWorldVectorFor(coord.x, coord.y), Vector3.one);
+
+            if (zone.vertices.Count > 1) {
+                //Gizmos.color = Color.yellow;
+                Vector2 coord = zone.vertices[0];
+                Vector2 coord2 = zone.vertices[zone.vertices.Count - 1];
+                Gizmos.DrawLine(GetWorldVectorFor(coord.x, coord.y), GetWorldVectorFor(coord2.x, coord2.y));
+
+                //Gizmos.color = Color.green;
+                //coord = zone.vertices[zone.vertices.Count - 1];
+                //Gizmos.DrawCube(GetWorldVectorFor(coord.x, coord.y, -1), Vector3.one);
+
+                for (int i = 0; i < zone.vertices.Count - 1; i++) {
+                    Gizmos.color = zone.color;
+                    coord = zone.vertices[i];
+                    //Gizmos.DrawCube(GetWorldVectorFor(coord.x, coord.y, i), Vector3.one);
+                    coord2 = zone.vertices[i + 1];
+                    Gizmos.DrawLine(GetWorldVectorFor(coord.x, coord.y), GetWorldVectorFor(coord2.x, coord2.y));
+
+                    //Gizmos.color = Color.red;
+                    //Gizmos.DrawCube(GetWorldVectorFor(coord2.x, coord2.y, i + 10), Vector3.one);
+                }
             }
+
+            //Gizmos.color = Color.yellow;
+            //for (int i = 0; i < zone.edges.Count; i++) {
+            //    Gizmos.DrawCube(GetWorldVectorFor(zone.edges[i].x, zone.edges[i].y, 20 + i / 10), Vector3.one);
+            //}
+        }
+    }
+
+    void OnGUI() {
+        for (int i = 0; i < zones.Count; i++) {
+            Vector3 pos = Camera.main.WorldToScreenPoint(GetWorldVectorFor(zones[i].x, zones[i].y));
+            GUI.Label(new Rect(pos.x, Screen.height - pos.y, 100, 20), "" + i);
         }
     }
 
@@ -154,7 +252,8 @@ public class World : MonoBehaviour {
         public Color color;
 
         public int[,] map;
-        public HashSet<Vector2> edges = new HashSet<Vector2>();
+        public List<Vector2> edges = new List<Vector2>();
+        public List<Vector2> vertices = new List<Vector2>();
 
         public Zone(int worldWidth, int worldHeight, int _x, int _y, Color _color) {
             this.map = new int[worldWidth, worldHeight];
@@ -164,11 +263,11 @@ public class World : MonoBehaviour {
         }
     }
 
-    Vector3 GetWorldVectorFor(double x, double y) {
-        return new Vector3(-width / 2 + ((float)x), -height / 2 + ((float)y), 0);
+    Vector3 GetWorldVectorFor(float x, float y) {
+        return new Vector3(-width / 2 + x, -height / 2 + y, 0);
     }
 
-    Vector3 GetWorldVectorFor(int x, int y) {
-        return new Vector3(-width / 2 + x, -height / 2 + y, 0);
+    Vector3 GetWorldVectorFor(float x, float y, float z) {
+        return new Vector3(-width / 2 + x, -height / 2 + y, z);
     }
 }

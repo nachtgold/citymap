@@ -11,6 +11,7 @@ public class World : MonoBehaviour {
     public int zoneCount = 10;
 
     public string seed;
+    public Transform zonePrefap;
 
     private List<Zone> zones = new List<Zone>();
 
@@ -23,6 +24,37 @@ public class World : MonoBehaviour {
         GenerateMap();
         FindEdges();
         FindVertices();
+        TriangulateZones();
+    }
+
+    void TriangulateZones() {
+        for (int i = 0; i< zones.Count; ++i) {
+            Zone zone = zones[i];
+            Vector2[] vertices2D = zone.vertices.ToArray();
+
+            Triangulator triangulator = new Triangulator(vertices2D);
+            int[] indices = triangulator.Triangulate();
+
+            Vector3[] vertices = new Vector3[vertices2D.Length];
+            for (int j = 0; j < vertices.Length; j++) {
+                vertices[j] = GetWorldVectorFor(vertices2D[j]);
+                vertices2D[j] = GetWorldVector2For(vertices2D[j]);
+            }
+
+            Mesh msh = new Mesh();
+            msh.vertices = vertices;
+            msh.triangles = indices;
+            msh.RecalculateNormals();
+            msh.RecalculateBounds();
+
+            Transform clone = Instantiate(zonePrefap);
+            clone.parent = transform;
+            clone.name = "Zone " + i;
+            clone.GetComponent<MeshFilter>().mesh = msh;
+            
+            clone.GetComponent<MeshRenderer>().material.color = zone.color;
+            clone.GetComponent<PolygonCollider2D>().SetPath(0, vertices2D);
+        }
     }
 
     void FindVertices() {
@@ -58,7 +90,6 @@ public class World : MonoBehaviour {
     }
 
     void FindEdges() {
-        //Zone zone = zones[24];
         foreach (Zone zone in zones) {
             bool edgesNotFound = true;
             for (int x = zone.x; edgesNotFound && x < width; x++) {
@@ -186,62 +217,7 @@ public class World : MonoBehaviour {
             zones.Add(zone);
         }
     }
-
-    void OnDrawGizmos() {
-        foreach (Zone zone in zones) {
-
-            //if (zone == zones[24]) {
-            //    Gizmos.color = Color.green;
-            //    for (int x = 0; x < width; x++) {
-            //        for (int y = 0; y < height; y++) {
-            //            if (zone.map[x, y] == 1) {
-            //                Gizmos.DrawCube(GetWorldVectorFor(x, y, 30), Vector3.one);
-            //            }
-            //        }
-            //    }
-            //}
-
-            Gizmos.color = Color.black;
-            Gizmos.DrawCube(GetWorldVectorFor(zone.x, zone.y), Vector3.one * 2);
-
-            Gizmos.color = zone.color;
-
-            if (zone.vertices.Count > 1) {
-                //Gizmos.color = Color.yellow;
-                Vector2 coord = zone.vertices[0];
-                Vector2 coord2 = zone.vertices[zone.vertices.Count - 1];
-                Gizmos.DrawLine(GetWorldVectorFor(coord.x, coord.y), GetWorldVectorFor(coord2.x, coord2.y));
-
-                //Gizmos.color = Color.green;
-                //coord = zone.vertices[zone.vertices.Count - 1];
-                //Gizmos.DrawCube(GetWorldVectorFor(coord.x, coord.y, -1), Vector3.one);
-
-                for (int i = 0; i < zone.vertices.Count - 1; i++) {
-                    Gizmos.color = zone.color;
-                    coord = zone.vertices[i];
-                    //Gizmos.DrawCube(GetWorldVectorFor(coord.x, coord.y, i), Vector3.one);
-                    coord2 = zone.vertices[i + 1];
-                    Gizmos.DrawLine(GetWorldVectorFor(coord.x, coord.y), GetWorldVectorFor(coord2.x, coord2.y));
-
-                    //Gizmos.color = Color.red;
-                    //Gizmos.DrawCube(GetWorldVectorFor(coord2.x, coord2.y, i + 10), Vector3.one);
-                }
-            }
-
-            //Gizmos.color = Color.yellow;
-            //for (int i = 0; i < zone.edges.Count; i++) {
-            //    Gizmos.DrawCube(GetWorldVectorFor(zone.edges[i].x, zone.edges[i].y, 20 + i / 10), Vector3.one);
-            //}
-        }
-    }
-
-    void OnGUI() {
-        for (int i = 0; i < zones.Count; i++) {
-            Vector3 pos = Camera.main.WorldToScreenPoint(GetWorldVectorFor(zones[i].x, zones[i].y));
-            GUI.Label(new Rect(pos.x, Screen.height - pos.y, 100, 20), "" + i);
-        }
-    }
-
+    
     double distance(int x1, int x2, int y1, int y2) {
         return Math.Abs(x1 - x2) + Math.Abs(y1 - y2);
     }
@@ -261,6 +237,14 @@ public class World : MonoBehaviour {
             this.y = _y;
             this.color = _color;
         }
+    }
+
+    Vector3 GetWorldVectorFor(Vector2 vector) {
+        return new Vector3(-width / 2 + vector.x, -height / 2 + vector.y, 0);
+    }
+
+    Vector3 GetWorldVector2For(Vector2 vector) {
+        return new Vector2(-width / 2 + vector.x, -height / 2 + vector.y);
     }
 
     Vector3 GetWorldVectorFor(float x, float y) {

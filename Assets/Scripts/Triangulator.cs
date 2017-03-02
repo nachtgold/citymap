@@ -1,4 +1,6 @@
-﻿using UnityEngine;
+﻿// Triangulator is from http://wiki.unity3d.com/index.php?title=Triangulator
+
+using UnityEngine;
 using System.Collections.Generic;
 
 public class Triangulator {

@@ -20,6 +20,8 @@ GraphicsSettings:
   - {fileID: 15106, guid: 0000000000000000f000000000000000, type: 0}
   - {fileID: 10770, guid: 0000000000000000f000000000000000, type: 0}
   - {fileID: 10782, guid: 0000000000000000f000000000000000, type: 0}
+  - {fileID: 4800000, guid: ef91f830001397243be874181d2dce9b, type: 3}
+  - {fileID: 4800000, guid: b718f8b052bd511409b00360f1319e4a, type: 3}
   m_PreloadedShaders: []
   m_ShaderSettings:
     useScreenSpaceShadows: 1
